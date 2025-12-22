@@ -1,4 +1,5 @@
-import shutil
+from app.services.filesystem_service import FileSystemService
+from app.services.logging_service import LoggingService
 
 class CleanupService:
     def __init__(self, library_dir, archive_file):
@@ -9,34 +10,32 @@ class CleanupService:
 
     def clear_archive(self):
         """Delete the download archive file"""
-        if self.archive_file.exists():
-            self.archive_file.unlink()
-            print(f"✅ Cleared archive: {self.archive_file}")
+        if FileSystemService.remove_file(self.archive_file):
+            LoggingService.success(f"Cleared archive: {self.archive_file}")
         else:
-            print(f"ℹ️  Archive not found: {self.archive_file}")
+            LoggingService.info(f"Archive not found: {self.archive_file}")
 
     def clear_downloads(self):
         """Delete all downloaded music files"""
-        if self.music_dir.exists():
-            shutil.rmtree(self.music_dir)
-            self.music_dir.mkdir(parents=True, exist_ok=True)
-            print(f"✅ Cleared downloads: {self.music_dir}")
+        if FileSystemService.remove_directory(self.music_dir):
+            FileSystemService.ensure_directory(self.music_dir)
+            LoggingService.success(f"Cleared downloads: {self.music_dir}")
         else:
-            print(f"ℹ️  Music directory not found: {self.music_dir}")
+            LoggingService.info(f"Music directory not found: {self.music_dir}")
 
     def clear_playlists(self):
         """Delete all generated playlist files"""
         if self.playlists_dir.exists():
             for playlist_file in self.playlists_dir.glob("*.m3u8"):
-                playlist_file.unlink()
-            print(f"✅ Cleared playlists: {self.playlists_dir}")
+                FileSystemService.remove_file(playlist_file)
+            LoggingService.success(f"Cleared playlists: {self.playlists_dir}")
         else:
-            print(f"ℹ️  Playlists directory not found: {self.playlists_dir}")
+            LoggingService.info(f"Playlists directory not found: {self.playlists_dir}")
 
     def clear_all(self):
         """Delete everything: archive, downloads, and playlists"""
-        print("🗑️  Clearing all data...")
+        LoggingService.cleanup("Clearing all data...")
         self.clear_archive()
         self.clear_downloads()
         self.clear_playlists()
-        print("✅ All data cleared")
+        LoggingService.success("All data cleared")

@@ -5,6 +5,8 @@ from app.services.library_service import LibraryService
 from app.services.playlist_service import PlaylistService
 from app.services.metadata_service import MetadataService
 from app.services.cleanup_service import CleanupService
+from app.services.filesystem_service import FileSystemService
+from app.services.logging_service import LoggingService
 
 def show_usage():
     print("""
@@ -49,8 +51,8 @@ if len(sys.argv) > 1:
         sys.exit(1)
 
 # Normal sync operation
-cfg.music.mkdir(parents=True, exist_ok=True)
-cfg.playlists.mkdir(parents=True, exist_ok=True)
+FileSystemService.ensure_directory(cfg.music)
+FileSystemService.ensure_directory(cfg.playlists)
 
 downloader = DownloadService(
     cfg.archive,
@@ -63,7 +65,7 @@ metadata = MetadataService()
 
 for playlist_url in cfg.playlist_urls:
     playlist_name = downloader.get_playlist_name(playlist_url)
-    print(f"▶ Syncing {playlist_name}")
+    LoggingService.progress(f"Syncing {playlist_name}")
     downloader.fetch(playlist_url)
 
     tracks = list(library.all_tracks())
@@ -72,5 +74,10 @@ for playlist_url in cfg.playlist_urls:
         metadata.add_playlist(t.file, playlist_name)
 
     playlist_service.update(playlist_name, tracks)
+    
+    # Clean up temporary directory after each playlist
+    tmp_dir = cfg.music / ".tmp"
+    if FileSystemService.remove_directory(tmp_dir):
+        LoggingService.cleanup("Cleaned up temporary files")
 
-print("✅ Sync complete")
+LoggingService.success("Sync complete")
