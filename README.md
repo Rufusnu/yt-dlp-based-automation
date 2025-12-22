@@ -1,4 +1,4 @@
-# yt2vdj
+# yt-dlp-based-automation
 
 Service-oriented YouTube/SoundCloud → VirtualDJ library sync tool that downloads playlists, organizes music by playlist name, and generates portable `.m3u8` playlists with metadata tagging.
 
