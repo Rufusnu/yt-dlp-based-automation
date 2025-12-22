@@ -12,6 +12,7 @@ Service-oriented YouTube/SoundCloud → VirtualDJ library sync tool that downloa
 - **Emoji Support** - Preserves exact playlist names including emojis from YouTube/SoundCloud
 - **Configurable** - All yt-dlp settings controlled via `yt-dlp.conf`
 - **Cleanup Tools** - Built-in commands to manage archive and downloads
+- **Clean Architecture** - Dependency injection, service-oriented design with result objects
 
 ## Installation
 
@@ -112,29 +113,46 @@ python main.py --help
 ```
 yt-dlp-based-automation/
 ├── app/
-│   ├── config.py              # Config loader
-│   ├── models.py              # Data models (Track)
+│   ├── config.py                  # Configuration loader
+│   ├── models.py                  # Data models (Track)
+│   ├── results.py                 # Result objects for operations
+│   ├── container.py               # Dependency injection container
+│   ├── orchestrator.py            # Workflow orchestration
 │   ├── services/
 │   │   ├── download_service.py    # yt-dlp integration
 │   │   ├── library_service.py     # Track discovery
 │   │   ├── playlist_service.py    # .m3u8 generation
 │   │   ├── metadata_service.py    # Tag embedding
-│   │   ├── archive_service.py     # Archive management
-│   │   └── cleanup_service.py     # Cleanup operations
+│   │   ├── cleanup_service.py     # Cleanup operations
+│   │   ├── filesystem_service.py  # File/directory operations
+│   │   └── logging_service.py     # Console output formatting
 │   └── utils/
 │
-├── library/                   # ✅ PORTABLE - copy to other machines
-│   ├── music/                 # Downloaded audio files (organized by playlist)
-│   └── playlists/             # Generated .m3u8 files
+├── library/                       # ✅ PORTABLE - copy to other machines
+│   ├── music/                     # Downloaded audio files (organized by playlist)
+│   └── playlists/                 # Generated .m3u8 files
 │
-├── config.yaml                # Your playlist URLs (gitignored)
-├── config.yaml.example        # Template for config
-├── yt-dlp.conf               # yt-dlp settings
-├── archive.txt               # Download history (gitignored)
-├── main.py                   # Entry point
-├── requirements.txt          # Python dependencies
-└── README.md
+├── config.yaml                    # Your playlist URLs (gitignored)
+├── config.yaml.example            # Template for config
+├── yt-dlp.conf                   # yt-dlp settings
+├── archive.txt                   # Download history (gitignored)
+├── main.py                       # CLI entry point
+├── requirements.txt              # Python dependencies
+├── README.md                     # This file
+└── ARCHITECTURE.md               # Architecture documentation
 ```
+
+## Architecture
+
+This project follows a **clean, service-oriented architecture** with:
+
+- **Dependency Injection** - All services receive dependencies via constructor
+- **Result Objects** - Services return structured results instead of logging directly
+- **Separation of Concerns** - Business logic separate from presentation
+- **Single Responsibility** - Each service has one clear purpose
+- **Orchestration Pattern** - Workflow coordination separated from business logic
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation.
 
 ## How It Works
 

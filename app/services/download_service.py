@@ -25,7 +25,7 @@ class DownloadService:
                         data = json.loads(line)
                         # Get playlist_title if available
                         if "playlist_title" in data:
-                            return data["playlist_title"]
+                            return data["playlist_title"], None
                         # Fallback to playlist field
                         if "playlist" in data:
                             return data["playlist"], None
