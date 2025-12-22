@@ -1,6 +1,9 @@
 from mutagen.oggopus import OggOpus
 
 class MetadataService:
+    def __init__(self):
+        pass
+    
     def add_playlist(self, file, playlist_name):
         try:
             audio = OggOpus(file)

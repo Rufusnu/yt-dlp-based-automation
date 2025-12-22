@@ -1,12 +1,7 @@
 import sys
 from app.config import Config
-from app.services.download_service import DownloadService
-from app.services.library_service import LibraryService
-from app.services.playlist_service import PlaylistService
-from app.services.metadata_service import MetadataService
-from app.services.cleanup_service import CleanupService
-from app.services.filesystem_service import FileSystemService
-from app.services.logging_service import LoggingService
+from app.container import ServiceContainer
+from app.orchestrator import SyncOrchestrator
 
 def show_usage():
     print("""
@@ -20,7 +15,15 @@ Commands:
   clear-all         Delete everything (archive + downloads + playlists)
     """)
 
+# Load configuration
 cfg = Config()
+
+# Initialize service container with dependency injection
+container = ServiceContainer(cfg)
+
+# Get services
+cleanup = container.get('cleanup')
+logging = container.get('logging')
 
 # Handle cleanup commands
 if len(sys.argv) > 1:
@@ -30,19 +33,24 @@ if len(sys.argv) > 1:
         show_usage()
         sys.exit(0)
     
-    cleanup = CleanupService(cfg.library, cfg.archive)
-    
     if command == "clear-archive":
-        cleanup.clear_archive()
+        result = cleanup.clear_archive()
+        logging.log_result(result)
         sys.exit(0)
     elif command == "clear-downloads":
-        cleanup.clear_downloads()
+        result = cleanup.clear_downloads()
+        logging.log_result(result)
         sys.exit(0)
     elif command == "clear-playlists":
-        cleanup.clear_playlists()
+        result = cleanup.clear_playlists()
+        logging.log_result(result)
         sys.exit(0)
     elif command == "clear-all":
-        cleanup.clear_all()
+        logging.cleanup(logging._format_message('clear_all_start'))
+        results = cleanup.clear_all()
+        for result in results:
+            logging.log_result(result)
+        logging.success(logging._format_message('clear_all_complete'))
         sys.exit(0)
     elif command == "sync":
         pass  # Continue to sync
@@ -50,34 +58,6 @@ if len(sys.argv) > 1:
         show_usage()
         sys.exit(1)
 
-# Normal sync operation
-FileSystemService.ensure_directory(cfg.music)
-FileSystemService.ensure_directory(cfg.playlists)
-
-downloader = DownloadService(
-    cfg.archive,
-    cfg.yt_dlp_config,
-)
-
-library = LibraryService(cfg.music)
-playlist_service = PlaylistService(cfg.playlists)
-metadata = MetadataService()
-
-for playlist_url in cfg.playlist_urls:
-    playlist_name = downloader.get_playlist_name(playlist_url)
-    LoggingService.progress(f"Syncing {playlist_name}")
-    downloader.fetch(playlist_url)
-
-    tracks = list(library.all_tracks())
-
-    for t in tracks:
-        metadata.add_playlist(t.file, playlist_name)
-
-    playlist_service.update(playlist_name, tracks)
-    
-    # Clean up temporary directory after each playlist
-    tmp_dir = cfg.music / ".tmp"
-    if FileSystemService.remove_directory(tmp_dir):
-        LoggingService.cleanup("Cleaned up temporary files")
-
-LoggingService.success("Sync complete")
+# Execute sync workflow
+orchestrator = SyncOrchestrator(container)
+orchestrator.sync_all_playlists()

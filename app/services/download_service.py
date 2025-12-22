@@ -1,14 +1,14 @@
 import subprocess
 import json
-from app.services.logging_service import LoggingService
+from app.results import DownloadResult, OperationStatus
 
 class DownloadService:
     def __init__(self, archive, yt_dlp_config):
         self.archive = archive
         self.yt_dlp_config = yt_dlp_config
 
-    def get_playlist_name(self, playlist_url):
-        """Fetch playlist name from yt-dlp"""
+    def get_playlist_name(self, playlist_url) -> tuple[str, str | None]:
+        """Fetch playlist name from yt-dlp. Returns (name, error)"""
         cmd = [
             "yt-dlp",
             "--dump-json",
@@ -28,16 +28,33 @@ class DownloadService:
                             return data["playlist_title"]
                         # Fallback to playlist field
                         if "playlist" in data:
-                            return data["playlist"]
+                            return data["playlist"], None
         except Exception as e:
-            LoggingService.warning(f"Could not fetch playlist name: {e}")
-        return "Unknown"
+            return "Unknown", str(e)
+        return "Unknown", "No playlist data found"
 
-    def fetch(self, playlist_url):
+    def fetch(self, playlist_url) -> DownloadResult:
+        """Download playlist tracks."""
         cmd = [
             "yt-dlp",
             "--config-location", str(self.yt_dlp_config),
             "--download-archive", str(self.archive),
             playlist_url,
         ]
-        subprocess.run(cmd, check=False)
+        result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            return DownloadResult(
+                success=True,
+                operation="download",
+                status=OperationStatus.SUCCESS,
+                data={"url": playlist_url}
+            )
+        else:
+            return DownloadResult(
+                success=False,
+                operation="download",
+                status=OperationStatus.FAILED,
+                error=result.stderr or "Download failed",
+                data={"url": playlist_url}
+            )
