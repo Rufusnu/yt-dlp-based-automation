@@ -1,0 +1,7 @@
+library_dir: "./library"
+archive_file: "./archive.txt"
+yt_dlp_config: "./yt-dlp.conf"
+
+playlists:
+  - https://music.youtube.com/playlist?list=YOUR_PLAYLIST_ID_HERE
+  - https://music.youtube.com/playlist?list=ANOTHER_PLAYLIST_ID
