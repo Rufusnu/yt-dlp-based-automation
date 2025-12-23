@@ -5,10 +5,12 @@ from app.orchestrator import SyncOrchestrator
 
 def show_usage():
     print("""
-Usage: python main.py [command]
+Usage: python main.py [command] [options]
 
 Commands:
   sync              Sync playlists (default)
+    --url URL       Sync a single playlist by URL
+  regenerate-playlists  Regenerate all m3u8 files from existing music folders
   clear-archive     Delete download archive only
   clear-downloads   Delete all music files only
   clear-playlists   Delete all playlist files only
@@ -52,12 +54,24 @@ if len(sys.argv) > 1:
             logging.log_result(result)
         logging.success(logging._format_message('clear_all_complete'))
         sys.exit(0)
+    elif command == "regenerate-playlists":
+        # Regenerate m3u8 files for all existing music folders
+        orchestrator = SyncOrchestrator(container)
+        orchestrator.regenerate_all_playlists()
+        sys.exit(0)
     elif command == "sync":
-        pass  # Continue to sync
+        # Check for --url parameter
+        if len(sys.argv) > 2 and sys.argv[2] == "--url" and len(sys.argv) > 3:
+            # Sync single playlist by URL
+            url = sys.argv[3]
+            orchestrator = SyncOrchestrator(container)
+            orchestrator.sync_single_playlist(url)
+            sys.exit(0)
+        # Otherwise continue to sync all playlists
     else:
         show_usage()
         sys.exit(1)
 
-# Execute sync workflow
+# Execute sync workflow (all playlists)
 orchestrator = SyncOrchestrator(container)
 orchestrator.sync_all_playlists()

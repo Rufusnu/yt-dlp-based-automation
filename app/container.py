@@ -25,11 +25,13 @@ class ServiceContainer:
         # Core services (no dependencies)
         self._services['filesystem'] = FileSystemService()
         self._services['logging'] = LoggingService()
+        self._services['metadata'] = MetadataService()
         
         # Business logic services (with dependencies)
         self._services['download'] = DownloadService(
             archive=self.config.archive,
-            yt_dlp_config=self.config.yt_dlp_config
+            yt_dlp_config=self.config.yt_dlp_config,
+            music_dir=self.config.music
         )
         
         self._services['library'] = LibraryService(
@@ -37,10 +39,10 @@ class ServiceContainer:
         )
         
         self._services['playlist'] = PlaylistService(
-            playlist_dir=self.config.playlists
+            playlist_dir=self.config.playlists,
+            music_dir=self.config.music,
+            metadata_service=self.get('metadata')
         )
-        
-        self._services['metadata'] = MetadataService()
         
         self._services['cleanup'] = CleanupService(
             library_dir=self.config.library,
