@@ -1,17 +1,19 @@
 from pathlib import Path
-from typing import List, TYPE_CHECKING, Dict
+from typing import List, TYPE_CHECKING, Dict, Optional
 import re
 from app.results import PlaylistResult, OperationStatus
 
 if TYPE_CHECKING:
     from app.services.download_service import TrackInfo
     from app.services.metadata_service import MetadataService
+    from app.services.database_service import DatabaseService
 
 class PlaylistService:
-    def __init__(self, playlist_dir: Path, music_dir: Path, metadata_service=None):
+    def __init__(self, playlist_dir: Path, music_dir: Path, metadata_service=None, database_service=None):
         self.playlist_dir = playlist_dir
         self.music_dir = music_dir
         self.metadata_service = metadata_service
+        self.database_service = database_service
     
     @staticmethod
     def _sanitize_playlist_name(name: str) -> str:
@@ -28,6 +30,72 @@ class PlaylistService:
         # Replace invalid filename characters
         name = re.sub(r'[<>:"|?*]', '', name)
         return name
+
+    # ==================== Database-backed methods (PREFERRED) ====================
+    
+    def generate_from_database(self, playlist_name: str) -> PlaylistResult:
+        """
+        Generate m3u8 from database (fast - no file scanning).
+        
+        This is the PREFERRED method when database is available.
+        Falls back to metadata scanning if database unavailable.
+        """
+        if not self.database_service:
+            # Fallback to metadata scanning
+            return self.generate_from_metadata(playlist_name)
+        
+        m3u = self.playlist_dir / f"{playlist_name}.m3u8"
+        
+        # Query database for tracks in this playlist
+        tracks = self.database_service.get_tracks_in_playlist(playlist_name)
+        
+        # Filter to only existing files
+        matching_files = []
+        for track in tracks:
+            file_path = Path(track.file_path)
+            if file_path.exists():
+                matching_files.append(file_path)
+        
+        # Write m3u8
+        with m3u.open("w", encoding="utf-8") as f:
+            for file in sorted(matching_files, key=lambda p: p.name.lower()):
+                rel = "../music/" + file.name
+                f.write(rel + "\n")
+        
+        return PlaylistResult(
+            success=True,
+            operation="playlist_updated",
+            status=OperationStatus.SUCCESS,
+            playlist_name=playlist_name,
+            track_count=len(matching_files),
+            data={"playlist_name": playlist_name, "track_count": len(matching_files)}
+        )
+    
+    def generate_all_from_database(self) -> Dict[str, PlaylistResult]:
+        """
+        Generate m3u8 for all playlists in the database (fast).
+        
+        Returns:
+            Dict mapping playlist_name -> PlaylistResult
+        """
+        if not self.database_service:
+            # Fallback to metadata scanning
+            return self.generate_all_from_metadata()
+        
+        results = {}
+        all_playlists = self.database_service.get_all_playlists()
+        
+        for playlist_name in all_playlists:
+            # Skip invalid playlist names
+            sanitized = self._sanitize_playlist_name(playlist_name)
+            if not sanitized:
+                continue
+            
+            results[playlist_name] = self.generate_from_database(playlist_name)
+        
+        return results
+
+    # ==================== Metadata-backed methods (FALLBACK) ====================
 
     def generate_from_metadata(self, playlist_name: str) -> PlaylistResult:
         """

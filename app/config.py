@@ -11,5 +11,8 @@ class Config:
         self.playlists = self.library / "playlists"
         self.archive = Path(raw["archive_file"]).resolve()
         self.yt_dlp_config = Path(raw["yt_dlp_config"]).resolve()
+        
+        # Database file - default to library/library.db
+        self.database = self.library / "library.db"
 
         self.playlist_urls = raw["playlists"]

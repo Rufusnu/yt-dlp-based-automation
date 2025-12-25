@@ -74,7 +74,21 @@ class BasePlatformService(ABC):
     
     def _build_filename(self, artist: str, title: str) -> str:
         """
-        Build expected filename matching yt-dlp.conf template.
-        Template: %(artist,uploader|Unknown Artist)s - %(title)s.%(ext)s
+        Build expected filename matching yt-dlp's EXACT sanitization.
+        
+        Uses yt-dlp's own sanitize_filename function to ensure we predict
+        the exact same filename yt-dlp will create.
         """
-        return f"{artist} - {title}"
+        import yt_dlp.utils
+        
+        # Build the raw filename from our template: %(artist& - |)s%(title)s
+        if artist and artist != "Unknown Artist":
+            raw_filename = f"{artist} - {title}"
+        else:
+            raw_filename = title
+        
+        # Apply yt-dlp's exact sanitization
+        # restricted=False because we're not using --restrict-filenames
+        sanitized = yt_dlp.utils.sanitize_filename(raw_filename, restricted=False)
+        
+        return sanitized

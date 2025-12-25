@@ -60,10 +60,11 @@ Each service has one clear purpose:
 
 | Service | Responsibility |
 |---------|---------------|
-| `DownloadService` | Download tracks via yt-dlp |
+| `DatabaseService` | SQLite database for fast track lookups and deduplication |
+| `DownloadService` | Download tracks via yt-dlp, filename matching |
 | `LibraryService` | Discover audio files in library |
-| `PlaylistService` | Generate `.m3u8` playlist files |
-| `MetadataService` | Embed playlist tags in audio files |
+| `PlaylistService` | Generate `.m3u8` playlist files from database |
+| `MetadataService` | Embed playlist tags and source IDs in audio files |
 | `CleanupService` | Delete archives/downloads/playlists |
 | `FileSystemService` | File/directory operations |
 | `LoggingService` | Format and display messages |
@@ -361,7 +362,23 @@ Potential enhancements while maintaining architecture:
 2. **Configuration Validation** - Add validation service for config files
 3. **Retry Logic** - Add retry decorator for download operations
 4. **Progress Tracking** - Add progress reporting service
-5. **Database** - Replace flat archive with SQLite for better tracking
-6. **Async Operations** - Add async support for parallel downloads
+5. **Async Operations** - Add async support for parallel downloads
 
 All can be added as new services without modifying existing code.
+
+## Recent Architecture Changes
+
+### Database-First Approach (Implemented)
+- Added `DatabaseService` with SQLite backend for fast lookups
+- Tracks identified by source IDs (e.g., `youtube:dQw4w9WgXcQ`)
+- Database is a cache - can be rebuilt from file metadata
+- Enables fast playlist membership queries
+
+### Source ID Deduplication
+- Primary deduplication via source IDs instead of filename matching
+- Source IDs stored in file metadata (`purl` tag)
+- Prevents false positives from fuzzy filename matching
+
+### Confirmation Prompts
+- Destructive operations (`clear-all`, `clear-db`, `verify --fix`) require user confirmation
+- Prevents accidental data loss

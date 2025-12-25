@@ -1,17 +1,21 @@
 # yt-dlp-based-automation
 
-Service-oriented YouTube/SoundCloud → VirtualDJ library sync tool that downloads playlists, organizes music by playlist name, and generates portable `.m3u8` playlists with metadata tagging.
+Service-oriented YouTube/SoundCloud → VirtualDJ library sync tool that downloads playlists, organizes music with metadata tagging, and generates portable `.m3u8` playlists.
 
 ## Features
 
-- **Unified Music Library** - All tracks in one central location organized by playlist
+- **Unified Music Library** - All tracks in a flat directory with playlist info in metadata
+- **SQLite Database** - Fast track lookups and deduplication via source IDs
+- **Source ID Deduplication** - Tracks identified by YouTube/SoundCloud video ID, not filenames
 - **Automatic Playlist Generation** - Creates VirtualDJ-compatible `.m3u8` playlists with relative paths
 - **Metadata Tagging** - Embeds playlist names in file metadata for multi-playlist membership
-- **Download Archive** - Tracks downloaded songs to avoid duplicates on re-runs
+- **Download Archive** - yt-dlp archive prevents re-downloading
+- **Playlist Verification** - Compare local library against YouTube playlists
+- **Orphan Detection** - Find and manage tracks without playlist assignments
+- **Safe Destructive Operations** - Confirmation prompts for all data deletion
 - **Idempotent & Safe** - Re-run anytime without breaking existing library
 - **Emoji Support** - Preserves exact playlist names including emojis from YouTube/SoundCloud
 - **Configurable** - All yt-dlp settings controlled via `yt-dlp.conf`
-- **Cleanup Tools** - Built-in commands to manage archive and downloads
 - **Clean Architecture** - Dependency injection, service-oriented design with result objects
 
 ## Installation
@@ -79,6 +83,61 @@ Download new tracks and update playlists:
 python main.py
 # or explicitly
 python main.py sync
+
+# Sync a specific playlist
+python main.py sync --url "https://youtube.com/playlist?list=..."
+
+# Show stats after sync
+python main.py sync --stats
+```
+
+### Library Statistics
+View library information:
+```bash
+python main.py stats
+python main.py stats --detailed
+```
+
+### Orphan Management
+Find tracks without playlist assignments:
+```bash
+# List orphaned tracks
+python main.py orphans
+
+# Assign orphans to a playlist
+python main.py fix-orphans --playlist "Uncategorized"
+
+# Delete orphaned files (with confirmation)
+python main.py fix-orphans --delete
+```
+
+### Playlist Verification
+Compare local library with YouTube playlist:
+```bash
+# Check for differences
+python main.py verify --url "https://youtube.com/playlist?list=..."
+
+# Remove stale playlist tags (requires confirmation)
+python main.py verify --url "https://youtube.com/playlist?list=..." --fix
+```
+
+### Ambiguous Match Resolution
+Handle tracks that couldn't be automatically matched:
+```bash
+# Show unresolved matches
+python main.py ambiguous
+
+# Interactively resolve matches
+python main.py resolve-ambiguous
+```
+
+### Regeneration & Rebuild
+```bash
+# Regenerate all m3u8 files from database
+python main.py regenerate-playlists
+
+# Rebuild database from file metadata
+python main.py rebuild-db
 ```
 
 ### Cleanup Commands
@@ -98,9 +157,14 @@ python main.py clear-downloads
 python main.py clear-playlists
 ```
 
-**Delete everything** (archive + music + playlists):
+**Delete everything** (archive + music + playlists, requires confirmation):
 ```bash
 python main.py clear-all
+```
+
+**Clear database only** (keeps files, requires confirmation):
+```bash
+python main.py clear-db
 ```
 
 ### Help
@@ -114,23 +178,26 @@ python main.py --help
 yt-dlp-based-automation/
 ├── app/
 │   ├── config.py                  # Configuration loader
-│   ├── models.py                  # Data models (Track)
+│   ├── models.py                  # Data models (Track, PlaylistInfo)
 │   ├── results.py                 # Result objects for operations
 │   ├── container.py               # Dependency injection container
 │   ├── orchestrator.py            # Workflow orchestration
 │   ├── services/
+│   │   ├── database_service.py    # SQLite database for fast lookups
 │   │   ├── download_service.py    # yt-dlp integration
 │   │   ├── library_service.py     # Track discovery
 │   │   ├── playlist_service.py    # .m3u8 generation
-│   │   ├── metadata_service.py    # Tag embedding
+│   │   ├── metadata_service.py    # Tag embedding & source ID
 │   │   ├── cleanup_service.py     # Cleanup operations
 │   │   ├── filesystem_service.py  # File/directory operations
-│   │   └── logging_service.py     # Console output formatting
+│   │   ├── logging_service.py     # Console output formatting
+│   │   └── platforms/             # Platform-specific handlers
 │   └── utils/
 │
 ├── library/                       # ✅ PORTABLE - copy to other machines
-│   ├── music/                     # Downloaded audio files (organized by playlist)
-│   └── playlists/                 # Generated .m3u8 files
+│   ├── music/                     # Downloaded audio files (flat structure)
+│   ├── playlists/                 # Generated .m3u8 files
+│   └── library.db                 # SQLite database (can be rebuilt)
 │
 ├── config.yaml                    # Your playlist URLs (gitignored)
 ├── config.yaml.example            # Template for config
@@ -156,12 +223,21 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation.
 
 ## How It Works
 
-1. **Fetch Playlist Names** - Queries yt-dlp for the actual playlist title from YouTube/SoundCloud
-2. **Download Tracks** - Uses yt-dlp with your configured settings to download audio
-3. **Organize Files** - Saves tracks in `library/music/[Playlist Name]/[Artist] - [Title].opus`
-4. **Tag Metadata** - Embeds playlist name in file's comment tag (allows multiple playlists per track)
-5. **Generate Playlists** - Creates `.m3u8` files with relative paths pointing to tracks
-6. **Archive** - Records downloaded video IDs to prevent re-downloading
+1. **Fetch Playlist Info** - Queries yt-dlp for playlist title and track list with video IDs
+2. **Database Deduplication** - Checks database for existing tracks by source ID (e.g., `youtube:dQw4w9WgXcQ`)
+3. **Download New Tracks** - Uses yt-dlp to download only missing audio files
+4. **Tag Metadata** - Embeds playlist name in file's comment tag and source ID in purl tag
+5. **Update Database** - Adds new tracks to SQLite database with source IDs
+6. **Generate Playlists** - Creates `.m3u8` files from database queries
+7. **Archive** - yt-dlp records downloaded video IDs to prevent re-downloading
+
+### Deduplication Strategy
+
+The system uses **source IDs** (YouTube/SoundCloud video IDs) as the primary deduplication key:
+- More reliable than filename matching (avoids false positives)
+- Survives file renames
+- Works even if video title changes on platform
+- Database can always be rebuilt from file metadata
 
 ## Portability
 
@@ -188,10 +264,10 @@ Tracks will appear with playlist membership based on the embedded metadata.
 
 ## Dependencies
 
-- **Python 3.8+**
+- **Python 3.10+**
 - **PyYAML** - Config file parsing
 - **mutagen** - Audio metadata tagging
-- **yt-dlp** - YouTube/SoundCloud downloader (system dependency)
+- **yt-dlp** - YouTube/SoundCloud downloader (also Python library for filename sanitization)
 
 ## Troubleshooting
 

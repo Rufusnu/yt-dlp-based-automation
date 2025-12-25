@@ -84,8 +84,9 @@ class YouTubeService(BasePlatformService):
             if not title or title == "[Private video]" or title == "[Deleted video]":
                 continue
             
-            # YouTube: artist is usually in uploader for music videos
-            artist = data.get("artist") or data.get("uploader") or "Unknown Artist"
+            # Only use actual artist metadata, not uploader/channel name
+            # The channel name (uploader) is often wrong (e.g., "theladi6" instead of "Ladi6")
+            artist = data.get("artist") or ""
             video_id = data.get("id", "")
             
             tracks.append(TrackInfo(

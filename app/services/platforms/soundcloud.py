@@ -2,6 +2,7 @@
 SoundCloud platform service.
 Handles all SoundCloud-specific metadata fetching logic.
 """
+import time
 from typing import List, Optional, Tuple
 from app.services.platforms.base import BasePlatformService, TrackInfo
 
@@ -64,10 +65,17 @@ class SoundCloudService(BasePlatformService):
         Note: SoundCloud requires full metadata fetch (--no-download)
         because --flat-playlist doesn't return track title/artist.
         This is slower but necessary for accurate matching.
+        
+        Rate limiting: Added delays to avoid SoundCloud ban/timeouts.
         """
+        # Add delay before request to be gentle with SoundCloud servers
+        time.sleep(2)
+        
         result = self._run_ytdlp([
             "--dump-json",
             "--no-download",
+            "--sleep-requests", "2",  # 2 second delay between requests
+            "--socket-timeout", "30",  # Increase timeout to 30 seconds
             playlist_url,
         ])
         
@@ -78,7 +86,8 @@ class SoundCloudService(BasePlatformService):
         for data in self._parse_json_lines(result.stdout):
             # SoundCloud has good metadata support
             title = data.get("title") or data.get("track") or "Unknown Title"
-            artist = data.get("artist") or data.get("uploader") or "Unknown Artist"
+            # Only use actual artist metadata, not uploader/channel name
+            artist = data.get("artist") or ""
             track_id = data.get("id", "")
             
             tracks.append(TrackInfo(
