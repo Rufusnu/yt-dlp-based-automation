@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Playlist Downloader · sign in</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1c2330;--mut:#667085;--line:#dfe3ea;--acc:#2f6fed;--err:#c0392b}
+@media (prefers-color-scheme:dark){:root{--bg:#12151b;--card:#1a1f28;--fg:#e6e9ef;--mut:#98a2b3;--line:#2b3340;--acc:#6b9bff;--err:#ff7b6b}}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px system-ui,sans-serif}
+form{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px;width:min(360px,calc(100vw - 32px))}
+h1{font-size:20px;margin:0 0 18px}input,button{width:100%;font:inherit;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+button{margin-top:12px;background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600;cursor:pointer}
+#e{color:var(--err);min-height:1.3em;margin-top:10px;font-size:14px}
+</style></head><body>
+<form id="f"><h1>Playlist Downloader</h1>
+<input id="p" type="password" placeholder="Password" autocomplete="current-password" autofocus required>
+<button>Sign in</button><div id="e"></div></form>
+<script>
+document.getElementById('f').onsubmit=async ev=>{ev.preventDefault();
+ const r=await fetch('/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:document.getElementById('p').value})});
+ if(r.ok)location='/';else document.getElementById('e').textContent=(await r.json()).error||'error';};
+</script></body></html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Playlist Downloader</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1c2330;--mut:#667085;--line:#dfe3ea;--acc:#2f6fed;--ok:#1a8f4c;--warn:#b7791f;--err:#c0392b;--log:#0f1318;--logfg:#cbd5e1}
+@media (prefers-color-scheme:dark){:root{--bg:#12151b;--card:#1a1f28;--fg:#e6e9ef;--mut:#98a2b3;--line:#2b3340;--acc:#6b9bff;--ok:#4cc38a;--warn:#e0b04a;--err:#ff7b6b;--log:#0b0e12}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,sans-serif}
+header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+header h1{font-size:18px;margin:0;flex:1}
+main{max-width:1100px;margin:0 auto;padding:16px}
+nav{display:flex;gap:6px;margin-bottom:14px}nav button{flex:0}
+button{font:inherit;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}button.danger{color:var(--err)}
+button.tab.on{border-color:var(--acc);color:var(--acc);font-weight:600}button:disabled{opacity:.5;cursor:default}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+th.srt{cursor:pointer;user-select:none}th.srt:hover{color:var(--fg)}th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+.mut{color:var(--mut)}.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;border:1px solid var(--line)}
+.ok{color:var(--ok)}.errors,.failed{color:var(--err)}.stopped{color:var(--warn)}
+.bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--acc);width:0}
+pre#log{background:var(--log);color:var(--logfg);border-radius:10px;padding:12px;height:360px;overflow:auto;font:13px/1.45 ui-monospace,monospace;white-space:pre-wrap;margin:0}
+input[type=text]{font:inherit;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.grow{flex:1;min-width:180px}
+.url{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.tablewrap{overflow-x:auto}.hide{display:none}
+@media(max-width:640px){.hm{display:none}}
+</style></head><body>
+<header><h1>🎵 Playlist Downloader</h1><span id="state" class="pill">…</span><button onclick="logout()">Sign out</button></header>
+<main>
+<nav><button class="tab on" data-t="pl">Playlists</button><button class="tab" data-t="run">Run</button><button class="tab" data-t="hist">History</button><button class="tab" data-t="lib">Library</button><button class="tab" data-t="set">Settings</button></nav>
+
+<section id="pl">
+ <div class="card row">
+  <button class="pri" onclick="runAll()">▶ Run all enabled</button>
+  <span class="mut grow">Only one run at a time. Do not start the old bash scripts while a run is going.</span>
+  <button onclick="importScripts()">Import from scripts</button>
+ </div>
+ <div class="card row"><input class="grow" type="text" id="nu" placeholder="Playlist URL (the name is read from the playlist)"><button id="addb" onclick="addPl()">Add playlist</button></div>
+ <div class="card row"><button onclick="bulk(true)">☑ Select all</button><button onclick="bulk(false)">☐ Deselect all</button>
+  <input class="grow" type="text" id="flt" placeholder="Filter playlists (select/deselect then applies only to the ones shown)" oninput="draw()"><span class="mut" id="cnt"></span></div>
+ <div class="card tablewrap"><table><thead><tr><th class="srt" data-k="enabled">On</th><th class="srt" data-k="display">Name</th><th class="srt hm" data-k="source">Source</th><th class="srt hm" data-k="tracks">Tracks</th><th class="srt hm" data-k="last_run">Last run</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+</section>
+
+<section id="run" class="hide">
+ <div class="card"><div class="row"><b id="rtitle">Idle</b><span class="grow"></span><button class="danger" id="stopb" onclick="stopRun()" disabled>■ Stop</button></div>
+  <div class="mut" id="rsub" style="margin:6px 0 10px">Nothing is running.</div><div class="bar"><i id="pbar"></i></div></div>
+ <pre id="log"></pre>
+</section>
+
+<section id="hist" class="hide"><div id="runs"></div></section>
+<section id="lib" class="hide"><div id="libroot"></div></section>
+<section id="set" class="hide"><div id="setroot"></div></section>
+</main>
+<script src="/static/library.js"></script>
+<script src="/static/settings.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const H={'content-type':'application/json','x-requested-with':'ytw'};
+async function api(path,method='GET',body){const r=await fetch(path,{method,headers:H,body:body?JSON.stringify(body):undefined});
+ if(r.status===401){location='/login';throw 0}
+ if(!r.ok){let m='error';try{m=(await r.json()).detail}catch{}alert(m);throw 0}return r.json()}
+function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML}
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>show(b.dataset.t));
+function show(t){document.querySelectorAll('section').forEach(s=>s.classList.toggle('hide',s.id!==t));
+ document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+ if(t==='hist')loadRuns();if(t==='pl')loadPl();if(t==='lib'&&window.initLibrary)initLibrary($('libroot'));if(t==='set'&&window.initSettings)initSettings($('setroot'))}
+async function loadPl(){const p=await api('/api/playlists');PL=p;
+ if(!p.length&&!loadPl.asked){loadPl.asked=1;if(confirm('No playlists yet. Import them from the existing scripts?'))return importScripts()}
+ draw()}
+let SORT={k:'display',d:1};try{SORT=JSON.parse(localStorage.getItem('plsort'))||SORT}catch{}
+const plain=t=>(t||'').replace(/[^\p{L}\p{N}\s]/gu,'').trim();
+function sval(x,k){if(k==='display')return plain(x.display).toLowerCase();if(k==='enabled')return x.enabled?1:0;if(k==='tracks')return x.tracks;if(k==='last_run')return x.last_run||null;return (x[k]||'').toLowerCase()}
+function sorted(a){const k=SORT.k,d=SORT.d;return a.slice().sort((p,q)=>{const u=sval(p,k),v=sval(q,k);if(u==null&&v==null)return 0;if(u==null)return 1;if(v==null)return -1;
+ return (typeof u==='number'&&typeof v==='number'?u-v:String(u).localeCompare(String(v),undefined,{numeric:true,sensitivity:'base'}))*d})}
+function sortBy(k){SORT=SORT.k===k?{k,d:-SORT.d}:{k,d:1};try{localStorage.setItem('plsort',JSON.stringify(SORT))}catch{}draw()}
+document.querySelectorAll('th.srt').forEach(t=>t.onclick=()=>sortBy(t.dataset.k));
+function shown(){const f=($('flt').value||'').trim().toLowerCase();return sorted(PL.filter(x=>!f||(x.display+' '+x.name+' '+x.url).toLowerCase().includes(f)))}
+function draw(){const v=shown();document.querySelectorAll('th.srt').forEach(t=>{t.textContent=t.dataset.k===SORT.k?t.textContent.replace(/ [▲▼]$/,'')+(SORT.d>0?' ▲':' ▼'):t.textContent.replace(/ [▲▼]$/,'')});$('cnt').textContent=PL.filter(x=>x.enabled).length+' of '+PL.length+' selected';
+ $('rows').innerHTML=v.map(x=>`<tr><td><input type="checkbox" data-act="tog" data-id="${x.id}" ${x.enabled?'checked':''}></td>
+ <td><b>${esc(x.display)}</b>${x.title&&x.name&&x.name!==x.title&&x.name!=='(unnamed)'?` <span class="mut">· ${esc(x.name)}</span>`:''}<span class="mut url" title="${esc(x.url)}">${esc(x.url)}</span></td><td class="hm">${x.source==='soundcloud'?'SoundCloud':'YouTube'}</td>
+ <td class="hm">${x.tracks??'–'}</td><td class="hm mut">${esc(x.last_run||'never')}</td>
+ <td style="white-space:nowrap"><button data-act="run" data-id="${x.id}">▶</button> <button data-act="ren" data-id="${x.id}">✎</button> <button class="danger" data-act="del" data-id="${x.id}">✕</button></td></tr>`).join('')||'<tr><td colspan="6" class="mut">No playlists match.</td></tr>'}
+async function bulk(on){const v=shown();if(!v.length)return;
+ if(!on&&v.length===PL.length&&!confirm('Deselect all '+v.length+' playlists?'))return;
+ await api('/api/playlists/bulk','POST',{ids:v.map(x=>x.id),enabled:on});v.forEach(x=>x.enabled=on?1:0);draw()}
+let PL=[];
+$('rows').addEventListener('click',e=>{const b=e.target.closest('button[data-act]');if(!b)return;const id=+b.dataset.id,x=PL.find(p=>p.id===id);
+ if(b.dataset.act==='run')runOne(id);else if(b.dataset.act==='ren')ren(id,x.name);else if(b.dataset.act==='del')del(id,x.display)});
+$('rows').addEventListener('change',e=>{const c=e.target;if(c.dataset.act==='tog'){const x=PL.find(p=>p.id===+c.dataset.id);if(x)x.enabled=c.checked?1:0;$('cnt').textContent=PL.filter(x=>x.enabled).length+' of '+PL.length+' selected';tog(+c.dataset.id,c.checked)}});
+async function tog(id,v){await api('/api/playlists/'+id,'PATCH',{enabled:v})}
+async function ren(id,n){const v=prompt('Name',n);if(v){await api('/api/playlists/'+id,'PATCH',{name:v});loadPl()}}
+async function del(id,n){if(confirm('Remove "'+n+'" from the list? Downloaded files are kept.')){await api('/api/playlists/'+id,'DELETE');loadPl()}}
+async function addPl(){const b=$('addb');b.disabled=true;b.textContent='Looking up name…';try{const r=await api('/api/playlists','POST',{url:$('nu').value});$('nu').value='';await loadPl();alert('Added: '+r.name)}finally{b.disabled=false;b.textContent='Add playlist'}}
+async function importScripts(){const r=await api('/api/import','POST');alert(r.added+' playlist(s) imported, '+r.named+' matched to their emoji names');loadPl()}
+async function runAll(){if(confirm('Run all enabled playlists?')){await api('/api/run','POST',{ids:null});show('run')}}
+async function runOne(id){await api('/api/run','POST',{ids:[id]});show('run')}
+async function stopRun(){await api('/api/stop','POST')}
+async function logout(){await api('/logout','POST');location='/login'}
+let since=0,epoch=-1,last=null;
+async function poll(){try{const s=await api('/api/status?since='+since+'&epoch='+epoch);since=s.next;epoch=s.epoch;if(s.reset)$('log').textContent='';
+ if(s.log.length){const l=$('log'),at=l.scrollTop+l.clientHeight>=l.scrollHeight-30;l.textContent+=s.log.join('\n')+'\n';if(at)l.scrollTop=l.scrollHeight}
+ const st=s.status;$('state').textContent=s.running?'running':'idle';$('stopb').disabled=!s.running;
+ if(s.running&&st.playlist){$('rtitle').textContent=`[${st.idx}/${st.total}] ${st.playlist}`;
+  $('rsub').textContent=`${st.step||''}${st.track?' · '+st.track:''}${st.new?' · '+st.new+' new':''}`;$('pbar').style.width=(st.pct||0)+'%'}
+ else{$('rtitle').textContent=s.running?'Starting…':'Idle';$('rsub').textContent=s.running?'':'Nothing is running.';$('pbar').style.width='0'}
+ if(last&&!s.running&&last.running)loadRuns();last=s}catch(e){}setTimeout(poll,1000)}
+async function loadRuns(){const r=await api('/api/runs');
+ $('runs').innerHTML=r.map(x=>`<div class="card"><div class="row"><b>Run #${x.id}</b><span class="${x.status}">${x.status}</span><span class="mut grow">${esc(x.started)} · ${esc(x.summary||'')}</span></div>
+ <table><tbody>${x.items.map(i=>`<tr><td>${esc(i.name)}</td><td class="${i.status}">${i.status}</td><td>${i.new_tracks} new</td><td class="mut">${i.copied?'on NAS':'not copied'}</td>
+ <td>${i.errors.map(e=>`<div class="errors" title="${esc(e.text)}">${esc(e.why)}</div>`).join('')}</td></tr>`).join('')}</tbody></table></div>`).join('')||'<div class="card mut">No runs yet.</div>'}
+loadPl();poll();
+</script></body></html>

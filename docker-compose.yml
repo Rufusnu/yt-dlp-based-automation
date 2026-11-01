@@ -1,0 +1,21 @@
+# Set the paths in .env (see .env.example). The project folder and the NAS mount are mounted at the SAME
+# path inside the container, so the absolute paths inside yt-dlp.conf keep working.
+services:
+  ytdlp-web:
+    build: .
+    image: ytdlp-web:local
+    container_name: ytdlp-web
+    network_mode: host            # listens on port 8099
+    user: "${UID_GID:-1000:1000}"
+    group_add: ["${EXTRA_GID:-1001}"]
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-UTC}
+      HOME: ${YT_BASE}/webui
+      XDG_CACHE_HOME: ${YT_BASE}/webui/cache
+      YT_BASE: ${YT_BASE}
+      YT_NAS: ${YT_NAS}
+      YT_NAS_MOUNT: ${YT_NAS_MOUNT}
+    volumes:
+      - ${YT_BASE}:${YT_BASE}
+      - ${YT_NAS_MOUNT}:${YT_NAS_MOUNT}:rslave
